@@ -14,11 +14,20 @@ export default async function middleware(
     const ip = request.ip ?? "127.0.0.1";
     const { success, pending, limit, reset, remaining } =
         await ratelimit.limit(ip);
-    return success
-        ? NextResponse.next()
-        : NextResponse.redirect(new URL("/blocked", request.url));
+    if (success) {
+        return NextResponse.next();
+    }
+
+    if (request.nextUrl.pathname.startsWith("/api/")) {
+        return NextResponse.json(
+            { error: "Too many requests" },
+            { status: 429, headers: { "Retry-After": Math.max(reset, 1).toString() } }
+        );
+    }
+
+    return NextResponse.redirect(new URL("/blocked", request.url));
 }
 
 export const config = {
-    matcher: "/",
+    matcher: ["/", "/api/:path*"],
 };

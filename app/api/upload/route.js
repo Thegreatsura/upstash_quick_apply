@@ -7,6 +7,9 @@ import { createReadStream } from 'fs';
 import stream from 'stream';
 dotenv.config();
 
+const MAX_UPLOAD_SIZE_BYTES = 5 * 1024 * 1024;
+const SAFE_UUID_RE = /^[A-Za-z0-9_-]{1,80}$/;
+
 const auth = new google.auth.GoogleAuth({
     scopes: ['https://www.googleapis.com/auth/drive.file'],
     credentials: {
@@ -37,8 +40,20 @@ export const POST = async (req, res) => {
     const uuid = formData.get("uuid");
     const file = formData.get("file");
 
+    if (typeof uuid !== "string" || !SAFE_UUID_RE.test(uuid)) {
+        return NextResponse.json({ error: "Invalid upload identifier." }, { status: 400 });
+    }
+
     if (!file) {
         return NextResponse.json({ error: "No files received." }, { status: 400 });
+    }
+
+    if (file.type !== 'application/pdf') {
+        return NextResponse.json({ error: "Only PDF uploads are allowed." }, { status: 400 });
+    }
+
+    if (file.size > MAX_UPLOAD_SIZE_BYTES) {
+        return NextResponse.json({ error: "File too large." }, { status: 413 });
     }
 
     const buffer = Buffer.from(await file.arrayBuffer());
